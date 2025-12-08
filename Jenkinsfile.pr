@@ -1,0 +1,86 @@
+import { execSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+
+const APP_NAME = 'fast-react-pizza';
+const BUILD_NUMBER = process.env.BUILD_NUMBER || 'local';
+const DOCKER_IMAGE = `${APP_NAME}-pr-${BUILD_NUMBER}`;
+const CONTAINER_NAME = `${APP_NAME}-pr-${BUILD_NUMBER}`;
+const PORT = process.env.PORT || '3001';
+const APP_URL = `http://localhost:${PORT}`;
+
+function run(cmd: string) {
+  console.log(`\n> ${cmd}`);
+  execSync(cmd, { stdio: 'inherit', shell: true });
+}
+
+function stage(name: string, fn: () => void) {
+  console.log(`\n========== STAGE: ${name} ==========\n`);
+  fn();
+}
+
+// ---------------- PIPELINE ----------------
+try {
+  stage('Checkout', () => {
+    run('git log -1 --oneline');
+    run('dir');
+  });
+
+  stage('Setup', () => {
+    run('node --version');
+    run('npm --version');
+    run('docker --version');
+  });
+
+  stage('Build', () => {
+    run('npm ci');
+  });
+
+  stage('Docker Build', () => {
+    run(`docker build -t ${DOCKER_IMAGE} .`);
+    run(`docker images | findstr ${APP_NAME}`);
+  });
+
+  stage('Run Container', () => {
+    // Cleanup old containers by port
+    run(`for /f "tokens=*" %i in ('docker ps -aq --filter "publish=${PORT}" 2^>nul') do docker rm -f %i`);
+    // Cleanup old container by name
+    run(`docker rm -f ${CONTAINER_NAME} 2>nul || echo No existing container`);
+    // Start container
+    run(`docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 ${DOCKER_IMAGE}`);
+    // Wait 5 seconds
+    run('ping 127.0.0.1 -n 6 > nul');
+    // Verify container
+    run(`docker ps | findstr ${CONTAINER_NAME}`);
+  });
+
+  stage('Smoke Test', () => {
+    run(`set APP_URL=${APP_URL} && npm run smoke`);
+  });
+
+  stage('Archive Artifacts', () => {
+    const artifactsDir = path.resolve('artifacts');
+    if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir);
+    fs.writeFileSync(path.join(artifactsDir, 'build-info.txt'), [
+      `Build: ${BUILD_NUMBER}`,
+      `Job: ${process.env.JOB_NAME || 'local'}`,
+      `Status: PASSED`,
+      `Date: ${new Date().toLocaleString()}`,
+      `Image: ${DOCKER_IMAGE}`,
+    ].join('\n'));
+    run(`docker logs ${CONTAINER_NAME} > artifacts\\container-logs.txt 2>&1`);
+  });
+
+  stage('Cleanup', () => {
+    run(`docker stop ${CONTAINER_NAME} 2>nul`);
+    run(`docker rm ${CONTAINER_NAME} 2>nul`);
+    run(`docker rmi ${DOCKER_IMAGE} 2>nul`);
+  });
+
+  console.log('\n✅ Pipeline completed successfully ✅');
+  process.exit(0);
+
+} catch (err) {
+  console.error('\n❌ Pipeline failed ❌', err);
+  process.exit(1);
+}
