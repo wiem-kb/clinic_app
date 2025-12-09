@@ -21,7 +21,9 @@ pipeline {
         stage('Setup') {
             steps {
                 bat 'npm install -g pnpm'
-                bat 'pnpm install --frozen-lockfile'
+               
+                bat 'pnpm install --no-frozen-lockfile'
+
             }
         }
 
