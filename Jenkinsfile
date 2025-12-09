@@ -71,7 +71,7 @@ pipeline {
                     bat "docker login -u %DOCKER_USERNAME% -p %DOCKER_PASSWORD% ${DOCKER_IMAGE_BASE.split('/')[0]}"
                     bat "docker push ${DOCKER_IMAGE_FULL}"
                     // Pousser le tag 'latest' uniquement pour la branche 'dev' ou le tag
-                    if (env.BRANCH_NAME == 'dev' || env.TAG_NAME != null) {
+                    if (env.BRANCH_NAME == 'master' || env.TAG_NAME != null) {
                         bat "docker tag ${DOCKER_IMAGE_FULL} ${DOCKER_IMAGE_BASE}:latest"
                         bat "docker push ${DOCKER_IMAGE_BASE}:latest"
                     }
@@ -82,7 +82,7 @@ pipeline {
         stage('Smoke Test') {
             when {
                 // Exécuter pour tous les flux (PR, dev, tag)
-                expression { return env.BRANCH_NAME == 'dev' || env.TAG_NAME != null || env.CHANGE_ID != null }
+                expression { return env.BRANCH_NAME == 'master' || env.TAG_NAME != null || env.CHANGE_ID != null }
             }
             steps {
                 script {
@@ -134,7 +134,7 @@ pipeline {
         stage('Archive Artifacts') {
             when {
                 // Exécuter pour les push sur 'dev' et les tags
-                expression { return env.BRANCH_NAME == 'dev' || env.TAG_NAME != null }
+                expression { return env.BRANCH_NAME == 'master' || env.TAG_NAME != null }
             }
             steps {
                 // Archiver les logs de build, le rapport de smoke test et le rapport de pipeline
