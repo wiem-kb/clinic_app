@@ -36,9 +36,11 @@ RUN adduser --system --uid 1001 nextjs
 
 # Copier les fichiers nécessaires depuis l'étape de construction
 # Le dossier standalone contient le serveur Next.js
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Définir les variables d'environnement
 ENV NODE_ENV production
