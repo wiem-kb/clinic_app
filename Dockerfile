@@ -1,13 +1,18 @@
-# Étape 1: Installation des dépendances et construction
+# Dockerfile pour l'application Next.js (clinic_app)
+
+# --- Étape 1: Construction (Build) ---
+# Utilisation de l'image node:20-alpine pour la construction
 FROM node:20-alpine AS builder
 
 # Définir le répertoire de travail
 WORKDIR /app
 
-# Copier les fichiers de lock et package.json pour optimiser le cache Docker
+# Copier les fichiers de configuration de dépendances
+# Ceci permet d'optimiser le cache Docker en ne réinstallant les dépendances que si ces fichiers changent
 COPY package.json pnpm-lock.yaml ./
 
-# Installer les dépendances en utilisant pnpm
+# Installer pnpm globalement et les dépendances du projet
+# Utilisation de --frozen-lockfile pour garantir une installation reproductible
 RUN npm install -g pnpm && pnpm install --frozen-lockfile
 
 # Copier le reste du code source
@@ -18,14 +23,14 @@ COPY . .
 # output: "standalone" crée un dossier .next/standalone optimisé pour le déploiement Docker
 RUN NEXT_TELEMETRY_DISABLED=1 pnpm run build
 
-# Étape 2: Image d'exécution (Production)
-# Utiliser une image Node.js plus petite pour l'exécution
+# --- Étape 2: Exécution (Runtime) ---
+# Utilisation d'une image Node.js plus petite pour l'exécution finale (sécurité et taille)
 FROM node:20-alpine AS runner
 
 # Définir le répertoire de travail
 WORKDIR /app
 
-# Définir l'utilisateur non-root pour la sécurité
+# Créer un utilisateur non-root pour des raisons de sécurité
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
@@ -45,5 +50,5 @@ EXPOSE 3000
 # Changer l'utilisateur pour l'exécution
 USER nextjs
 
-# Commande de démarrage
+# Commande de démarrage du serveur Next.js standalone
 CMD ["node", "server.js"]
