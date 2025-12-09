@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # Service de l'application Next.js
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: clinic_app:latest
+    container_name: clinic_app_container
+    ports:
+      - "3000:3000"
+    environment:
+      # Variables d'environnement pour Next.js en production
+      NODE_ENV: production
+      PORT: 3000
+      # Ajoutez ici d'autres variables d'environnement nécessaires (ex: DATABASE_URL)
+    restart: always
+    # Monter le code source pour le développement local (si besoin)
+    # volumes:
+    #   - .:/app
+    #   - /app/node_modules
+
+# Le projet Next.js semble être une application front-end sans base de données
+# explicite dans le code source visible. Si une base de données est nécessaire,
+# décommentez et configurez le service 'db' ci-dessous.
+
+# db:
+#   image: postgres:16-alpine
+#   container_name: clinic_app_db
+#   environment:
+#     POSTGRES_USER: user
+#     POSTGRES_PASSWORD: password
+#     POSTGRES_DB: clinic_app_db
+#   ports:
+#     - "5432:5432"
+#   volumes:
+#     - db_data:/var/lib/postgresql/data
+#   restart: always
+
+# volumes:
+#   db_data:
+#     driver: local
