@@ -1,44 +1,34 @@
-# Étape 1 : Build
-FROM node:20-alpine AS builder
+# Étape 1: Build
+FROM node:lts-alpine AS builder
 
 WORKDIR /app
 
-# Copier uniquement package.json et pnpm-lock.yaml pour optimiser le cache
+# Copier uniquement package.json et pnpm-lock.yaml pour cache
 COPY package.json pnpm-lock.yaml ./
 
-# Installer pnpm et dépendances
+# Installer pnpm globalement et dépendances
 RUN npm install -g pnpm
 RUN pnpm install --frozen-lockfile
 
 # Copier le reste du code
 COPY . .
 
-# Build Next.js (standalone)
+# Build Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
-# Étape 2 : Runtime
-FROM node:20-alpine AS runner
-
+# Étape 2: Runtime léger
+FROM node:lts-alpine AS runner
 WORKDIR /app
 
-# Créer un utilisateur non-root
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Copier le build optimisé et package.json nécessaire
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
-# Copier les fichiers nécessaires depuis le builder
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-
-# Variables d'environnement (format recommandé)
-ENV NODE_ENV=production
-ENV PORT=3000
-
+# Exposer le port
 EXPOSE 3000
 
-USER nextjs
-
-CMD ["node", "server.js"]
+# Commande par défaut
+CMD ["node", ".next/standalone/server.js"]
