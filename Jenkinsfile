@@ -14,9 +14,11 @@ pipeline {
     // Variables d'environnement
     environment {
         // Nom de l'image Docker. Remplacez 'votre_registry' par votre registre
-        DOCKER_IMAGE = "votre_registry/clinic_app"
+        DOCKER_IMAGE_BASE = "votre_registry/clinic_app"
         // Tag de l'image basé sur le numéro de build de Jenkins ou le tag Git
         IMAGE_TAG = "${env.TAG_NAME ?: env.BUILD_NUMBER}"
+        // Nom complet de l'image avec tag
+        DOCKER_IMAGE_FULL = "${DOCKER_IMAGE_BASE}:${IMAGE_TAG}"
         // ID des credentials Docker configurés dans Jenkins
         DOCKER_CREDENTIALS_ID = "docker-registry-credentials"
         // Nom du conteneur temporaire pour le smoke test
@@ -46,26 +48,32 @@ pipeline {
             }
         }
 
-        stage('Run (Docker)') {
+        stage('Docker Build') {
             when {
                 // Exécuter pour les push sur 'dev' et les tags, mais pas pour les PR
+                expression { return env.BRANCH_NAME == 'dev' || env.TAG_NAME != null || env.CHANGE_ID != null }
+            }
+            steps {
+                // Utilisation de bat pour le docker build
+                bat "docker build -t ${DOCKER_IMAGE_FULL} -f Dockerfile ."
+            }
+        }
+
+        stage('Docker Push') {
+            when {
+                // Exécuter pour les push sur 'dev' et les tags
                 expression { return env.BRANCH_NAME == 'dev' || env.TAG_NAME != null }
             }
             steps {
-                script {
-                    // Construire l'image Docker
-                    docker.build("${DOCKER_IMAGE}:${IMAGE_TAG}", "-f Dockerfile .")
-                    
-                    // Pousser l'image vers le registre Docker (uniquement pour les tags et dev)
-                    withCredentials([usernamePassword(credentialsId: "id", passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
-                        // Utilisation de bat pour les commandes docker
-                        bat "docker login -u %DOCKER_USERNAME% -p %DOCKER_PASSWORD% ${DOCKER_IMAGE.split('/')[0]}"
-                        bat "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
-                        // Pousser le tag 'latest' uniquement pour la branche 'dev' ou le tag
-                        if (env.BRANCH_NAME == 'dev' || env.TAG_NAME != null) {
-                            bat "docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${DOCKER_IMAGE}:latest"
-                            bat "docker push ${DOCKER_IMAGE}:latest"
-                        }
+                // Pousser l'image vers le registre Docker (uniquement pour les tags et dev)
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                    // Utilisation de bat pour les commandes docker
+                    bat "docker login -u %DOCKER_USERNAME% -p %DOCKER_PASSWORD% ${DOCKER_IMAGE_BASE.split('/')[0]}"
+                    bat "docker push ${DOCKER_IMAGE_FULL}"
+                    // Pousser le tag 'latest' uniquement pour la branche 'dev' ou le tag
+                    if (env.BRANCH_NAME == 'dev' || env.TAG_NAME != null) {
+                        bat "docker tag ${DOCKER_IMAGE_FULL} ${DOCKER_IMAGE_BASE}:latest"
+                        bat "docker push ${DOCKER_IMAGE_BASE}:latest"
                     }
                 }
             }
@@ -79,7 +87,7 @@ pipeline {
             steps {
                 script {
                     // Démarrer le conteneur pour le smoke test
-                    bat "docker run -d --rm --name ${SMOKE_CONTAINER_NAME} -p 3000:3000 ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                    bat "docker run -d --rm --name ${SMOKE_CONTAINER_NAME} -p 3000:3000 ${DOCKER_IMAGE_FULL}"
                     
                     // Logique du Smoke Test intégrée en PowerShell
                     powershell """
@@ -144,4 +152,3 @@ pipeline {
         }
     }
 }
-
