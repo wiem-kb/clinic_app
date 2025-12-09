@@ -1,11 +1,6 @@
 pipeline {
 
-    agent {
-        docker {
-            image 'node:20-alpine'
-            args '-u root'
-        }
-    }
+    agent any 
 
     environment {
         DOCKER_IMAGE_BASE = "wiemkbaier/clinic_app"
@@ -46,6 +41,9 @@ pipeline {
                 bat "docker build -t ${DOCKER_IMAGE_FULL} -f Dockerfile ."
             }
         }
+
+    
+
 
         stage('Docker Push') {
             when {
